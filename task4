@@ -1,0 +1,91 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    confusion_matrix,
+    roc_curve
+)
+
+# Load the dataset
+# Replace 'telco_churn.csv' with your dataset file path
+data = pd.read_csv('Telco-Customer-Churn.csv')
+
+# Handle missing values and data types
+data['TotalCharges'] = pd.to_numeric(data['TotalCharges'], errors='coerce')  # Convert TotalCharges to numeric
+data.ffill(inplace=True)  # Forward fill missing values
+
+# Simulate missing columns (if needed)
+# These columns are placeholders; replace with actual metrics if available
+data['num_sessions'] = np.random.randint(1, 50, size=len(data))  # Simulated column
+data['subscription_length'] = np.random.randint(1, 36, size=len(data))  # Simulated column
+
+# Calculate engagement score
+data['engagement_score'] = data['num_sessions'] / data['subscription_length']
+
+# Encode categorical variables
+categorical_columns = [
+    'gender', 'Partner', 'Dependents', 'PhoneService', 'MultipleLines',
+    'InternetService', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection',
+    'TechSupport', 'StreamingTV', 'StreamingMovies', 'Contract',
+    'PaperlessBilling', 'PaymentMethod', 'Churn'
+]
+
+# Convert categorical columns to dummy variables
+data = pd.get_dummies(data, columns=categorical_columns, drop_first=True)
+
+# Split dataset into features and target
+X = data.drop(['Churn_Yes', 'customerID'], axis=1, errors='ignore')  # Replace 'Churn_Yes' with your target column
+y = data['Churn_Yes']
+
+# Split the data into training and test sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Logistic Regression Model
+logistic_model = LogisticRegression(max_iter=1000, random_state=42)
+logistic_model.fit(X_train, y_train)
+logistic_preds = logistic_model.predict(X_test)
+
+# Random Forest Classifier
+rf_model = RandomForestClassifier(random_state=42)
+rf_model.fit(X_train, y_train)
+rf_preds = rf_model.predict(X_test)
+
+# XGBoost Classifier
+xgb_model = XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='logloss')
+xgb_model.fit(X_train, y_train)
+xgb_preds = xgb_model.predict(X_test)
+
+# Model Evaluation
+def evaluate_model(model_name, y_test, y_preds):
+    print(f"--- {model_name} ---")
+    print(f"Accuracy: {accuracy_score(y_test, y_preds):.4f}")
+    print(f"Precision: {precision_score(y_test, y_preds):.4f}")
+    print(f"Recall: {recall_score(y_test, y_preds):.4f}")
+    print(f"ROC AUC: {roc_auc_score(y_test, y_preds):.4f}")
+    print(f"Confusion Matrix:\n{confusion_matrix(y_test, y_preds)}")
+    print("\n")
+
+evaluate_model("Logistic Regression", y_test, logistic_preds)
+evaluate_model("Random Forest", y_test, rf_preds)
+evaluate_model("XGBoost", y_test, xgb_preds)
+
+# Plot ROC Curve for XGBoost Model
+import matplotlib.pyplot as plt
+
+fpr, tpr, thresholds = roc_curve(y_test, xgb_model.predict_proba(X_test)[:, 1])
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, color='blue', label='XGBoost (AUC = %0.4f)' % roc_auc_score(y_test, xgb_preds))
+plt.plot([0, 1], [0, 1], color='red', linestyle='--')
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve")
+plt.legend()
+plt.show()
